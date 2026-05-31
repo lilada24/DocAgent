@@ -1,0 +1,22 @@
+[Unit]
+Description=DocAgent Python Agent Service
+After=network.target
+
+[Service]
+Type=simple
+User=docagent
+Group=docagent
+WorkingDirectory=/opt/docagent/corecoder
+ExecStart=/opt/docagent/venv/bin/python -m corecoder.agent_service
+ExecStop=/bin/kill -15 $MAINPID
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=docagent-agent
+
+Environment="OPENAI_API_KEY=your_api_key"
+Environment="OPENAI_BASE_URL=https://api.deepseek.com"
+
+[Install]
+WantedBy=multi-user.target

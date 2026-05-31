@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir "fastapi>=0.100.0" "uvicorn>=0.23.0" "websockets>=11.0" \
+    "openai>=1.0" "rich>=13.0" "prompt_toolkit>=3.0" "python-dotenv>=1.0"
+
+COPY corecoder/ ./corecoder/
+
+EXPOSE 8000
+
+ENV OPENAI_API_KEY=""
+ENV OPENAI_BASE_URL="https://api.deepseek.com"
+
+CMD ["python", "-m", "corecoder.agent_service"]
