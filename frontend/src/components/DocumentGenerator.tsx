@@ -1,31 +1,70 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Form, Input, Select, Button, Progress, Card, message, Spin } from 'antd';
 import { FileCode, Rocket, CheckCircle, AlertCircle } from 'lucide-react';
 import { documentService } from '@/services/documentService';
+import { projectService } from '@/services/projectService';
 import { wsService } from '@/services/websocket';
-import type { GenerateRequest, TaskStatus } from '@/types';
+import type { GenerateRequest, TaskStatus, Project } from '@/types';
 
 export function DocumentGenerator() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 加载项目列表（供下拉选择）
+  useEffect(() => {
+    projectService.getAll()
+      .then(setProjects)
+      .catch(() => message.error('加载项目列表失败'));
+  }, []);
+
+  // 状态更新逻辑（WebSocket 和 HTTP 轮询共用）
+  const handleStatusUpdate = (data: TaskStatus) => {
+    setTaskStatus(data);
+    if (data.status === 'completed') {
+      message.success('文档生成完成！');
+      setLoading(false);
+      stopPolling();
+    } else if (data.status === 'failed') {
+      message.error('文档生成失败：' + (data.error || '未知错误'));
+      setLoading(false);
+      stopPolling();
+    }
+  };
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (currentTaskId) {
-      wsService.subscribeToTask(currentTaskId, (data) => {
-        setTaskStatus(data);
-        if (data.status === 'completed') {
-          message.success('文档生成完成！');
-          setLoading(false);
-        } else if (data.status === 'failed') {
-          message.error('文档生成失败：' + data.error);
-          setLoading(false);
+      // 1. WebSocket 订阅（实时推送）
+      console.log('[DocGen] Subscribing to task via STOMP:', currentTaskId);
+      wsService.subscribeToTask(currentTaskId, handleStatusUpdate);
+
+      // 2. HTTP 轮询兜底（每 2 秒，防止 WebSocket 失效）
+      stopPolling();
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const status = await documentService.getTaskStatus(currentTaskId);
+          if (status) {
+            console.log('[DocGen] Polled status:', status.status, status.progress + '%');
+            handleStatusUpdate(status);
+          }
+        } catch {
+          // 轮询失败静默忽略，等待下一次
         }
-      });
+      }, 2000);
 
       return () => {
         wsService.unsubscribeFromTask(currentTaskId);
+        stopPolling();
       };
     }
   }, [currentTaskId]);
@@ -40,9 +79,14 @@ export function DocumentGenerator() {
         model: values.model,
         apiKey: values.apiKey || undefined,
         baseUrl: values.baseUrl || undefined,
+        projectName: values.projectName || undefined,
       };
 
       setLoading(true);
+      setTaskStatus(null);
+      setCurrentTaskId(null);
+      stopPolling();
+
       const response = await documentService.generate(data);
       setCurrentTaskId(response.taskId);
       setTaskStatus({
@@ -52,7 +96,7 @@ export function DocumentGenerator() {
         createdAt: response.createdAt,
         updatedAt: response.createdAt,
       });
-      message.success('任务已创建');
+      message.success('任务已创建，开始处理...');
     } catch (error: any) {
       message.error('创建任务失败：' + (error.message || '未知错误'));
       setLoading(false);
@@ -76,12 +120,16 @@ export function DocumentGenerator() {
     switch (taskStatus.status) {
       case 'pending':
         return '等待中';
+      case 'created':
+        return '已创建';
       case 'running':
         return '生成中';
       case 'completed':
         return '已完成';
       case 'failed':
         return '失败';
+      case 'error':
+        return '错误';
       default:
         return taskStatus.status;
     }
@@ -95,8 +143,43 @@ export function DocumentGenerator() {
       </div>
 
       <Card className="mb-4">
-        <Form form={form} layout="vertical" onFinish={handleGenerate}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleGenerate}
+          initialValues={{
+            docType: 'readme',
+            language: 'chinese',
+            model: 'deepseek-chat',
+          }}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Form.Item
+              name="projectName"
+              label="关联项目"
+            >
+              <Select
+                allowClear
+                showSearch
+                placeholder="选择已有项目（可选）"
+                options={projects.map((p) => ({
+                  value: String(p.id),
+                  label: `${p.name} (${p.path})`,
+                }))}
+                filterOption={(input, option) =>
+                  (option?.label as string).toLowerCase().includes(input.toLowerCase())
+                }
+                onChange={(val) => {
+                  if (val) {
+                    const proj = projects.find((p) => String(p.id) === val);
+                    if (proj) {
+                      form.setFieldsValue({ projectPath: proj.path });
+                    }
+                  }
+                }}
+              />
+            </Form.Item>
+
             <Form.Item
               name="projectPath"
               label="项目路径"
@@ -115,7 +198,6 @@ export function DocumentGenerator() {
                   { value: 'api', label: 'API 文档' },
                   { value: 'all', label: '全部文档' },
                 ]}
-                defaultValue="readme"
               />
             </Form.Item>
 
@@ -128,7 +210,6 @@ export function DocumentGenerator() {
                   { value: 'chinese', label: '中文' },
                   { value: 'english', label: '英文' },
                 ]}
-                defaultValue="chinese"
               />
             </Form.Item>
 
@@ -143,7 +224,6 @@ export function DocumentGenerator() {
                   { value: 'gpt-4o', label: 'GPT-4o' },
                   { value: 'qwen2.5-coder', label: 'Qwen 2.5 Coder' },
                 ]}
-                defaultValue="deepseek-chat"
               />
             </Form.Item>
 

@@ -1,85 +1,151 @@
-import { io, Socket } from 'socket.io-client';
+import { Client, StompSubscription } from '@stomp/stompjs';
+
+type PendingSubscription = {
+  channel: string;
+  callback: (data: any) => void;
+};
 
 class WebSocketService {
-  private socket: Socket | null = null;
-  private listeners: Map<string, Set<(data: any) => void>> = new Map();
+  private client: Client | null = null;
+  private subscriptions: Map<string, StompSubscription> = new Map();
+  private pendingSubscriptions: PendingSubscription[] = [];
 
   connect(token: string) {
-    if (this.socket?.connected) {
+    if (this.client?.active) {
       return;
     }
 
-    this.socket = io('http://localhost:8080/ws', {
-      extraHeaders: {
+    this.client = new Client({
+      brokerURL: 'ws://localhost:8080/ws',
+      connectHeaders: {
         Authorization: `Bearer ${token}`,
       },
-      transports: ['websocket', 'polling'],
+      debug: (str) => {
+        console.log('STOMP:', str);
+      },
+      reconnectDelay: 5000,
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
     });
 
-    this.socket.on('connect', () => {
-      console.log('WebSocket connected');
-    });
+    this.client.onConnect = () => {
+      console.log('STOMP WebSocket connected');
+      // 连接成功后，执行所有挂起的订阅
+      this.flushPendingSubscriptions();
+    };
 
-    this.socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
-    });
+    this.client.onDisconnect = () => {
+      console.log('STOMP WebSocket disconnected');
+    };
 
-    this.socket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
+    this.client.onStompError = (frame) => {
+      console.error('STOMP error:', frame.headers['message'], frame.body);
+    };
+
+    this.client.activate();
   }
 
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+    this.pendingSubscriptions = [];
+    this.subscriptions.forEach((sub) => sub.unsubscribe());
+    this.subscriptions.clear();
+
+    if (this.client) {
+      this.client.deactivate();
+      this.client = null;
     }
   }
 
-  subscribeToTask(taskId: string, callback: (data: any) => void) {
-    if (!this.socket) {
-      console.warn('WebSocket not connected');
+  /**
+   * 连接就绪后执行挂起的订阅
+   */
+  private flushPendingSubscriptions() {
+    const pending = [...this.pendingSubscriptions];
+    this.pendingSubscriptions = [];
+    for (const { channel, callback } of pending) {
+      this.doSubscribe(channel, callback);
+    }
+  }
+
+  /**
+   * 执行实际的 STOMP 订阅
+   */
+  private doSubscribe(channel: string, callback: (data: any) => void) {
+    if (!this.client?.active) {
+      // 还未连接，放入挂起队列
+      this.pendingSubscriptions.push({ channel, callback });
       return;
     }
 
-    const channel = `/topic/task/${taskId}`;
-    //this.socket.subscribe(channel);
-    this.socket.on(channel, callback);
-
-    if (!this.listeners.has(channel)) {
-      this.listeners.set(channel, new Set());
+    if (this.subscriptions.has(channel)) {
+      return; // 已经订阅过了
     }
-    this.listeners.get(channel)!.add(callback);
+
+    const sub = this.client.subscribe(channel, (message) => {
+      try {
+        callback(JSON.parse(message.body));
+      } catch {
+        callback(message.body);
+      }
+    });
+    this.subscriptions.set(channel, sub);
+    console.log('STOMP subscribed to:', channel);
+  }
+
+  subscribeToTask(taskId: string, callback: (data: any) => void) {
+    // 后端通过 SimpMessagingTemplate.convertAndSend 推送到 /topic/task/{taskId}
+    const topicChannel = `/topic/task/${taskId}`;
+    this.doSubscribe(topicChannel, callback);
   }
 
   unsubscribeFromTask(taskId: string) {
-    if (!this.socket) return;
-
     const channel = `/topic/task/${taskId}`;
-    const callbacks = this.listeners.get(channel);
-    if (callbacks) {
-      callbacks.forEach((callback) => {
-        this.socket?.off(channel, callback);
-      });
-      this.listeners.delete(channel);
+
+    // 也从挂起列表中移除
+    this.pendingSubscriptions = this.pendingSubscriptions.filter(
+      (p) => p.channel !== channel
+    );
+
+    const sub = this.subscriptions.get(channel);
+    if (sub) {
+      sub.unsubscribe();
+      this.subscriptions.delete(channel);
     }
   }
 
   sendMessage(destination: string, data: any) {
-    if (!this.socket) {
-      console.warn('WebSocket not connected');
+    if (!this.client?.active) {
+      console.warn('STOMP WebSocket not connected');
       return;
     }
 
-    this.socket.emit(destination, data);
+    this.client.publish({
+      destination,
+      body: JSON.stringify(data),
+    });
   }
 
   onTaskUpdate(callback: (data: any) => void) {
-    if (!this.socket) return;
+    if (!this.client?.active) {
+      console.warn('STOMP WebSocket not connected yet, pending subscription');
+      this.pendingSubscriptions.push({
+        channel: '/topic/task/created',
+        callback,
+      });
+      return;
+    }
 
-    this.socket.on('taskUpdate', callback);
+    const channel = '/topic/task/created';
+    const sub = this.client.subscribe(channel, (message) => {
+      try {
+        callback(JSON.parse(message.body));
+      } catch {
+        callback(message.body);
+      }
+    });
+
     return () => {
-      this.socket?.off('taskUpdate', callback);
+      sub.unsubscribe();
     };
   }
 
@@ -88,7 +154,7 @@ class WebSocketService {
   }
 
   isConnected(): boolean {
-    return this.socket?.connected || false;
+    return this.client?.active || false;
   }
 }
 

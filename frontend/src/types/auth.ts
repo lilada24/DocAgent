@@ -18,6 +18,7 @@ export interface AuthResponse {
   username: string;
   email: string;
   fullName: string;
+  phone: string;
   expiresIn: number;
 }
 

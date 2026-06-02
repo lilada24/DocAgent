@@ -65,7 +65,8 @@ public class DocumentController {
 
     @GetMapping("/tasks")
     public ResponseEntity<List<TaskStatus>> getAllTasks() {
-        return ResponseEntity.ok(List.of());
+        var statuses = agentService.getAllTasks();
+        return ResponseEntity.ok(statuses);
     }
 
     @PostMapping("/projects/{projectId}/documents")

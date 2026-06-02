@@ -16,9 +16,11 @@ public class AuthResponse {
     private String username;
     private String email;
     private String fullName;
+    private String phone;
     private Long expiresIn;
 
-    public static AuthResponse of(String token, Long userId, String username, String email, String fullName, Long expiresIn) {
+    public static AuthResponse of(String token, Long userId, String username, String email,
+                                   String fullName, Long expiresIn) {
         return AuthResponse.builder()
                 .token(token)
                 .tokenType("Bearer")
@@ -26,6 +28,20 @@ public class AuthResponse {
                 .username(username)
                 .email(email)
                 .fullName(fullName)
+                .expiresIn(expiresIn)
+                .build();
+    }
+
+    public static AuthResponse of(String token, Long userId, String username, String email,
+                                   String fullName, String phone, Long expiresIn) {
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .userId(userId)
+                .username(username)
+                .email(email)
+                .fullName(fullName)
+                .phone(phone)
                 .expiresIn(expiresIn)
                 .build();
     }

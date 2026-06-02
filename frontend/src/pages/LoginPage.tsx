@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, message, Tabs } from 'antd';
 import { User, Lock, Mail } from 'lucide-react';
 import { authService } from '@/services/authService';

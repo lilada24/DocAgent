@@ -34,6 +34,25 @@ export const authService = {
     return response.data;
   },
 
+  updateProfile: async (data: {
+    fullName?: string;
+    email?: string;
+    phone?: string;
+  }): Promise<AuthResponse> => {
+    const response = await api.put('/auth/profile', data);
+    if (response.data.token) {
+      localStorage.setItem('user', JSON.stringify(response.data));
+    }
+    return response.data;
+  },
+
+  changePassword: async (data: {
+    oldPassword: string;
+    newPassword: string;
+  }): Promise<void> => {
+    await api.put('/auth/password', data);
+  },
+
   getToken: (): string | null => {
     return localStorage.getItem('token');
   },

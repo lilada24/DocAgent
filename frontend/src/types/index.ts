@@ -25,6 +25,14 @@ export interface Document {
   updatedAt: string;
 }
 
+export interface DocumentSummary {
+  id: number;
+  docType: string;
+  version: number;
+  updatedAt: string;
+  preview: string;
+}
+
 export interface GenerateRequest {
   projectPath: string;
   docType?: string;
@@ -50,6 +58,13 @@ export interface TaskStatus {
   error?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectStats {
+  projectId: number;
+  docCount: number;
+  docTypes: string[];
+  lastUpdated: string;
 }
 
 export interface HealthStatus {

@@ -1,8 +1,10 @@
 package com.example.docagent.controller;
 
 import com.example.docagent.dto.AuthResponse;
+import com.example.docagent.dto.ChangePasswordRequest;
 import com.example.docagent.dto.LoginRequest;
 import com.example.docagent.dto.RegisterRequest;
+import com.example.docagent.dto.UpdateProfileRequest;
 import com.example.docagent.dto.UserInfo;
 import com.example.docagent.entity.User;
 import com.example.docagent.service.AuthService;
@@ -49,6 +51,23 @@ public class AuthController {
         boolean exists = !username.isEmpty();
         Map<String, Boolean> response = new HashMap<>();
         response.put("available", exists);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<AuthResponse> updateProfile(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        return ResponseEntity.ok(authService.updateProfile(user.getId(), request));
+    }
+
+    @PutMapping("/password")
+    public ResponseEntity<Map<String, String>> changePassword(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(user.getId(), request.getOldPassword(), request.getNewPassword());
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "密码修改成功");
         return ResponseEntity.ok(response);
     }
 }

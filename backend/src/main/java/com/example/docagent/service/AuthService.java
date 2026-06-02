@@ -3,6 +3,7 @@ package com.example.docagent.service;
 import com.example.docagent.dto.AuthResponse;
 import com.example.docagent.dto.LoginRequest;
 import com.example.docagent.dto.RegisterRequest;
+import com.example.docagent.dto.UpdateProfileRequest;
 import com.example.docagent.dto.UserInfo;
 import com.example.docagent.entity.User;
 import com.example.docagent.repository.UserRepository;
@@ -102,5 +103,53 @@ public class AuthService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
+    }
+
+    @Transactional
+    public AuthResponse updateProfile(Long userId, UpdateProfileRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+
+        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new RuntimeException("邮箱已被其他用户使用");
+            }
+            user.setEmail(request.getEmail());
+        }
+
+        if (request.getFullName() != null) {
+            user.setFullName(request.getFullName());
+        }
+
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+
+        userRepository.save(user);
+        log.info("User profile updated: {}", user.getUsername());
+
+        return AuthResponse.of(
+                null, // 不返回新 token
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getPhone(),
+                tokenProvider.getJwtExpiration()
+        );
+    }
+
+    @Transactional
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("旧密码不正确");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        log.info("Password changed for user: {}", user.getUsername());
     }
 }

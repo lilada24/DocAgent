@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Layout, Menu, Typography, theme, Button, Dropdown, Avatar, Space, message } from 'antd';
+import { Layout, Menu, Typography, theme, Dropdown, Avatar, Space, message, Modal, Form, Input } from 'antd';
 import {
   FileCode,
   FolderOpen,
@@ -29,6 +29,10 @@ export function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [activeKey, setActiveKey] = useState<MenuKey>('generator');
   const [user, setUser] = useState<AuthResponse | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [profileForm] = Form.useForm();
+  const [settingsForm] = Form.useForm();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -54,6 +58,50 @@ export function App() {
     }
   };
 
+  const openProfileModal = () => {
+    const currentUser = authService.getUser();
+    if (currentUser) {
+      profileForm.setFieldsValue({
+        fullName: currentUser.fullName || '',
+        email: currentUser.email || '',
+        phone: currentUser.phone || '',
+      });
+    }
+    setProfileModalOpen(true);
+  };
+
+  const handleProfileSubmit = async () => {
+    try {
+      const values = await profileForm.validateFields();
+      const result = await authService.updateProfile(values);
+      setUser({ ...user!, ...result });
+      message.success('个人信息已更新');
+      setProfileModalOpen(false);
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '更新失败');
+    }
+  };
+
+  const handleSettingsSubmit = async () => {
+    try {
+      const values = await settingsForm.validateFields();
+      if (values.newPassword !== values.confirmPassword) {
+        message.error('两次输入的新密码不一致');
+        return;
+      }
+      await authService.changePassword({
+        oldPassword: values.oldPassword,
+        newPassword: values.newPassword,
+      });
+      message.success('密码已修改，请重新登录');
+      settingsForm.resetFields();
+      setSettingsModalOpen(false);
+      handleLogout();
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '修改密码失败');
+    }
+  };
+
   const menuItems = [
     { key: 'generator', icon: <FileCode size={20} />, label: '文档生成' },
     { key: 'projects', icon: <FolderOpen size={20} />, label: '项目管理' },
@@ -66,7 +114,7 @@ export function App() {
       case 'generator':
         return <DocumentGenerator />;
       case 'projects':
-        return <ProjectList />;
+        return <ProjectList onNavigateToGenerator={() => setActiveKey('generator')} />;
       case 'tasks':
         return <TaskMonitor />;
       case 'health':
@@ -99,8 +147,16 @@ export function App() {
   ];
 
   const handleUserMenuClick = ({ key }: { key: string }) => {
-    if (key === 'logout') {
-      handleLogout();
+    switch (key) {
+      case 'profile':
+        openProfileModal();
+        break;
+      case 'settings':
+        setSettingsModalOpen(true);
+        break;
+      case 'logout':
+        handleLogout();
+        break;
     }
   };
 
@@ -187,6 +243,75 @@ export function App() {
           {renderContent()}
         </Content>
       </Layout>
+
+      {/* 个人信息 Modal */}
+      <Modal
+        title="个人信息"
+        open={profileModalOpen}
+        onCancel={() => setProfileModalOpen(false)}
+        onOk={handleProfileSubmit}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={profileForm} layout="vertical">
+          <Form.Item label="用户名">
+            <Input value={user?.username || ''} disabled />
+          </Form.Item>
+          <Form.Item name="fullName" label="姓名">
+            <Input placeholder="请输入姓名" />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="邮箱"
+            rules={[{ type: 'email', message: '请输入有效的邮箱地址' }]}
+          >
+            <Input placeholder="请输入邮箱" />
+          </Form.Item>
+          <Form.Item name="phone" label="手机号">
+            <Input placeholder="请输入手机号" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 修改密码 Modal */}
+      <Modal
+        title="修改密码"
+        open={settingsModalOpen}
+        onCancel={() => {
+          setSettingsModalOpen(false);
+          settingsForm.resetFields();
+        }}
+        onOk={handleSettingsSubmit}
+        okText="确认修改"
+        cancelText="取消"
+      >
+        <Form form={settingsForm} layout="vertical">
+          <Form.Item
+            name="oldPassword"
+            label="旧密码"
+            rules={[{ required: true, message: '请输入旧密码' }]}
+          >
+            <Input.Password placeholder="请输入旧密码" />
+          </Form.Item>
+          <Form.Item
+            name="newPassword"
+            label="新密码"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 6, message: '密码至少6个字符' },
+            ]}
+          >
+            <Input.Password placeholder="请输入新密码" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="确认新密码"
+            rules={[{ required: true, message: '请再次输入新密码' }]}
+          >
+            <Input.Password placeholder="请再次输入新密码" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   );
 }

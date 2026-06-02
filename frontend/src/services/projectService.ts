@@ -1,5 +1,5 @@
 import api from './api';
-import type { Project, ProjectRequest } from '@/types';
+import type { Project, ProjectRequest, ProjectStats } from '@/types';
 
 export const projectService = {
   getAll: async (): Promise<Project[]> => {
@@ -28,6 +28,11 @@ export const projectService = {
 
   search: async (keyword: string): Promise<Project[]> => {
     const response = await api.get(`/projects/search?keyword=${keyword}`);
+    return response.data;
+  },
+
+  getStats: async (): Promise<ProjectStats[]> => {
+    const response = await api.get('/projects/stats');
     return response.data;
   },
 };

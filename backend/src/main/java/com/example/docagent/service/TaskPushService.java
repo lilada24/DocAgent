@@ -21,6 +21,14 @@ public class TaskPushService {
     private final SimpMessagingTemplate messagingTemplate;
     private final TaskRepository taskRepository;
 
+    /**
+     * 推送任务状态到公共 Topic（前端订阅此路径）
+     */
+    public void pushToTopic(String taskId, TaskStatus status) {
+        messagingTemplate.convertAndSend("/topic/task/" + taskId, status);
+        log.debug("Pushed status {} to /topic/task/{}", status.getStatus(), taskId);
+    }
+
     @Async
     public void pushTaskUpdate(String taskId, String userId) {
         Task task = taskRepository.findById(taskId).orElse(null);

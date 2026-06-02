@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Card, Tag, Badge, List, message } from 'antd';
+import { Card, Tag, Badge, List } from 'antd';
 import { Activity, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
-import { documentService } from '@/services/documentService';
+import api from '@/services/api';
 import type { TaskStatus } from '@/types';
 
 export function TaskMonitor() {
@@ -17,9 +17,8 @@ export function TaskMonitor() {
   const loadTasks = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/documents/tasks');
-      const data = await response.json();
-      setTasks(data.tasks || []);
+      const response = await api.get('/documents/tasks');
+      setTasks(response.data || []);
     } catch (error) {
       console.error('Failed to load tasks:', error);
     } finally {

@@ -2,6 +2,7 @@ package com.example.docagent.controller;
 
 import com.example.docagent.dto.ProjectRequest;
 import com.example.docagent.dto.ProjectResponse;
+import com.example.docagent.dto.ProjectStats;
 import com.example.docagent.entity.User;
 import com.example.docagent.service.ProjectService;
 import jakarta.validation.Valid;
@@ -37,6 +38,20 @@ public class ProjectController {
         return ResponseEntity.ok(projects);
     }
 
+    // 具体路径必须放在 /{id} 之前，否则会被路径变量拦截
+    @GetMapping("/search")
+    public ResponseEntity<List<ProjectResponse>> searchProjects(
+            @RequestParam String keyword,
+            @AuthenticationPrincipal User user) {
+        List<ProjectResponse> projects = projectService.searchProjects(keyword, user.getId());
+        return ResponseEntity.ok(projects);
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<List<ProjectStats>> getProjectStats(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(projectService.getProjectStats(user.getId()));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ProjectResponse> getProjectById(
             @PathVariable Long id,
@@ -64,11 +79,4 @@ public class ProjectController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/search")
-    public ResponseEntity<List<ProjectResponse>> searchProjects(
-            @RequestParam String keyword,
-            @AuthenticationPrincipal User user) {
-        List<ProjectResponse> projects = projectService.searchProjects(keyword, user.getId());
-        return ResponseEntity.ok(projects);
-    }
 }

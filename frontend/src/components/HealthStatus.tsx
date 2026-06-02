@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Tag, Spin } from 'antd';
+import { Card, Tag } from 'antd';
 import { Heart, Server, Bot } from 'lucide-react';
 import { documentService } from '@/services/documentService';
 

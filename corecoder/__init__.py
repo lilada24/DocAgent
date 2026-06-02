@@ -6,6 +6,5 @@ from corecoder.agent import Agent
 from corecoder.llm import LLM
 from corecoder.config import Config
 from corecoder.tools import ALL_TOOLS
-from docagent.doc_agent import DocAgent
 
-__all__ = ["Agent", "LLM", "Config", "ALL_TOOLS", "DocAgent", "__version__"]
+__all__ = ["Agent", "LLM", "Config", "ALL_TOOLS", "__version__"]

@@ -49,6 +49,7 @@ class GenerateRequest(BaseModel):
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     project_name: Optional[str] = None
+    task_id: Optional[str] = None  # 由后端传入，保证前后端任务 ID 一致
 
 
 class GenerateResponse(BaseModel):
@@ -110,7 +111,8 @@ async def create_generation_task(
     if not request.api_key and not get_default_api_key():
         raise HTTPException(status_code=400, detail="API key is required")
 
-    task_id = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    # 使用后端传入的 task_id，保证前后端任务 ID 一致
+    task_id = request.task_id or f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     tasks[task_id] = {
         "status": "pending",
@@ -132,12 +134,12 @@ async def create_generation_task(
     )
 
 
-async def run_generation_task(task_id: str, request: GenerateRequest):
+def run_generation_task(task_id: str, request: GenerateRequest):
+    """同步函数，由 FastAPI BackgroundTasks 在线程池中执行，不阻塞事件循环"""
     try:
         tasks[task_id]["status"] = "running"
         tasks[task_id]["progress"] = 10
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
-        await broadcast_progress(task_id, 10, "Starting...")
 
         api_key = request.api_key or get_default_api_key()
         base_url = request.base_url or get_default_base_url()
@@ -155,7 +157,7 @@ async def run_generation_task(task_id: str, request: GenerateRequest):
         )
 
         tasks[task_id]["progress"] = 20
-        await broadcast_progress(task_id, 20, "Agent initialized")
+        tasks[task_id]["updated_at"] = datetime.now().isoformat()
 
         if request.doc_type == "readme":
             result = doc_agent.generate_readme(request.project_name)
@@ -170,13 +172,11 @@ async def run_generation_task(task_id: str, request: GenerateRequest):
         tasks[task_id]["progress"] = 100
         tasks[task_id]["result"] = result
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
-        await broadcast_progress(task_id, 100, "Completed", result)
 
     except Exception as e:
         tasks[task_id]["status"] = "failed"
         tasks[task_id]["error"] = str(e)
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
-        await broadcast_progress(task_id, -1, f"Error: {str(e)}")
 
 
 @app.get("/api/tasks/{task_id}", response_model=TaskStatus)

@@ -2,8 +2,11 @@ package com.example.docagent.service;
 
 import com.example.docagent.dto.ProjectRequest;
 import com.example.docagent.dto.ProjectResponse;
+import com.example.docagent.dto.ProjectStats;
+import com.example.docagent.entity.Document;
 import com.example.docagent.entity.Project;
 import com.example.docagent.entity.User;
+import com.example.docagent.repository.DocumentRepository;
 import com.example.docagent.repository.ProjectRepository;
 import com.example.docagent.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,6 +26,7 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final DocumentRepository documentRepository;
 
     public ProjectResponse createProject(ProjectRequest request, Long userId) {
         User user = userRepository.findById(userId)
@@ -82,6 +87,29 @@ public class ProjectService {
     public List<ProjectResponse> searchProjects(String keyword, Long userId) {
         return projectRepository.searchByUserIdAndKeyword(userId, keyword).stream()
                 .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectStats> getProjectStats(Long userId) {
+        return projectRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(project -> {
+                    List<Document> docs = documentRepository.findByProjectId(project.getId());
+                    List<String> docTypes = docs.stream()
+                            .map(Document::getDocType)
+                            .collect(Collectors.toList());
+                    LocalDateTime lastUpdated = docs.stream()
+                            .map(Document::getUpdatedAt)
+                            .max(LocalDateTime::compareTo)
+                            .orElse(project.getUpdatedAt());
+
+                    return ProjectStats.builder()
+                            .projectId(project.getId())
+                            .docCount(docs.size())
+                            .docTypes(docTypes)
+                            .lastUpdated(lastUpdated)
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 
