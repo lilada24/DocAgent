@@ -32,6 +32,8 @@ dependencies = [
     "rich>=13.0",
     "prompt_toolkit>=3.0",
     "python-dotenv>=1.0",
+    "python-docx>=0.8.12",
+    "PyMuPDF>=1.23.0",
 ]
 
 [tool.hatch.build.targets.wheel]

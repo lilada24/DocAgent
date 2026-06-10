@@ -5,6 +5,20 @@ type PendingSubscription = {
   callback: (data: any) => void;
 };
 
+/**
+ * WebSocket URL 构造 — 自动适配开发和部署环境
+ *   开发环境: ws://localhost:8080/ws  (前后端分离，端口不同)
+ *   部署环境: ws(s)://<当前域名>/ws  (经 nginx 代理，同源)
+ */
+function buildBrokerURL(): string {
+  if (import.meta.env.DEV) {
+    return 'ws://localhost:8080/ws';
+  }
+  // 生产环境：根据当前页面协议和域名动态构造
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProtocol}//${window.location.host}/ws`;
+}
+
 class WebSocketService {
   private client: Client | null = null;
   private subscriptions: Map<string, StompSubscription> = new Map();
@@ -16,7 +30,7 @@ class WebSocketService {
     }
 
     this.client = new Client({
-      brokerURL: 'ws://localhost:8080/ws',
+      brokerURL: buildBrokerURL(),
       connectHeaders: {
         Authorization: `Bearer ${token}`,
       },
